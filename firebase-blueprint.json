@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the platform, either a candidate or a company admin.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "bio": { "type": "string" },
+        "resumeUrl": { "type": "string" },
+        "role": { "type": "string", "enum": ["candidate", "company_admin"] },
+        "savedJobs": { 
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "companyId": { "type": "string", "description": "Only for company_admin role" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Company": {
+      "title": "Company",
+      "description": "An aviation company or airline.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "logo": { "type": "string" },
+        "website": { "type": "string" },
+        "benefits": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "adminUid": { "type": "string" }
+      },
+      "required": ["id", "name", "adminUid"]
+    },
+    "Job": {
+      "title": "Job",
+      "description": "A job listing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "companyId": { "type": "string" },
+        "companyName": { "type": "string" },
+        "location": { "type": "string" },
+        "type": { "type": "string", "enum": ["Full-time", "Contract", "Part-time"] },
+        "category": { "type": "string" },
+        "salary": { "type": "string" },
+        "postedAt": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" },
+        "requirements": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "title", "companyId", "location"]
+    },
+    "Application": {
+      "title": "Application",
+      "description": "A job application.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "jobId": { "type": "string" },
+        "candidateUid": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "accepted", "rejected"] },
+        "appliedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "jobId", "candidateUid", "status", "appliedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/companies/{companyId}": {
+      "schema": "Company",
+      "description": "Company profiles"
+    },
+    "/jobs/{jobId}": {
+      "schema": "Job",
+      "description": "Job listings"
+    },
+    "/applications/{applicationId}": {
+      "schema": "Application",
+      "description": "Job applications"
+    }
+  }
+}

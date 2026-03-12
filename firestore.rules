@@ -1,0 +1,182 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Fields:
+//   - uid: string (required)
+//   - email: string (required, email format)
+//   - displayName: string
+//   - photoURL: string
+//   - bio: string
+//   - resumeUrl: string
+//   - role: string (required, enum: ['candidate', 'company_admin'])
+//   - savedJobs: list of strings
+//   - companyId: string
+//
+// Collection: companies
+// Fields:
+//   - id: string (required)
+//   - name: string (required)
+//   - description: string
+//   - logo: string
+//   - website: string
+//   - benefits: list of strings
+//   - adminUid: string (required)
+//
+// Collection: jobs
+// Fields:
+//   - id: string (required)
+//   - title: string (required)
+//   - companyId: string (required)
+//   - companyName: string
+//   - location: string (required)
+//   - type: string (enum: ['Full-time', 'Contract', 'Part-time'])
+//   - category: string
+//   - salary: string
+//   - postedAt: timestamp
+//   - description: string
+//   - requirements: list of strings
+//   - active: bool
+//
+// Collection: applications
+// Fields:
+//   - id: string (required)
+//   - jobId: string (required)
+//   - candidateUid: string (required)
+//   - status: string (required, enum: ['pending', 'reviewed', 'accepted', 'rejected'])
+//   - appliedAt: timestamp (required)
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "anubhav.diinfotech@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isCompanyAdmin(companyId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.companyId == companyId;
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      let allowedFields = ['uid', 'email', 'displayName', 'photoURL', 'bio', 'resumeUrl', 'role', 'savedJobs', 'companyId'];
+      return data.keys().hasOnly(allowedFields) &&
+             data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             data.role in ['candidate', 'company_admin'] &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
+             (!('photoURL' in data) || isValidUrl(data.photoURL)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() < 1000)) &&
+             (!('resumeUrl' in data) || isValidUrl(data.resumeUrl)) &&
+             (!('savedJobs' in data) || (data.savedJobs is list && data.savedJobs.size() < 100)) &&
+             (!('companyId' in data) || (data.companyId is string && data.companyId.size() < 50));
+    }
+
+    function isValidCompany(data) {
+      let allowedFields = ['id', 'name', 'description', 'logo', 'website', 'benefits', 'adminUid'];
+      return data.keys().hasOnly(allowedFields) &&
+             data.keys().hasAll(['id', 'name', 'adminUid']) &&
+             data.adminUid == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             (!('description' in data) || (data.description is string && data.description.size() < 2000)) &&
+             (!('logo' in data) || isValidUrl(data.logo)) &&
+             (!('website' in data) || isValidUrl(data.website)) &&
+             (!('benefits' in data) || (data.benefits is list && data.benefits.size() < 20));
+    }
+
+    function isValidJob(data) {
+      let allowedFields = ['id', 'title', 'companyId', 'companyName', 'location', 'type', 'category', 'salary', 'postedAt', 'description', 'requirements', 'active'];
+      return data.keys().hasOnly(allowedFields) &&
+             data.keys().hasAll(['id', 'title', 'companyId', 'location']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.companyId is string && data.companyId.size() < 50 &&
+             data.location is string && data.location.size() < 100 &&
+             (!('companyName' in data) || (data.companyName is string && data.companyName.size() < 100)) &&
+             (!('type' in data) || data.type in ['Full-time', 'Contract', 'Part-time']) &&
+             (!('category' in data) || (data.category is string && data.category.size() < 50)) &&
+             (!('salary' in data) || (data.salary is string && data.salary.size() < 50)) &&
+             (!('description' in data) || (data.description is string && data.description.size() < 5000)) &&
+             (!('requirements' in data) || (data.requirements is list && data.requirements.size() < 30)) &&
+             (!('active' in data) || data.active is bool) &&
+             (!('postedAt' in data) || data.postedAt is timestamp);
+    }
+
+    function isValidApplication(data) {
+      let allowedFields = ['id', 'jobId', 'candidateUid', 'status', 'appliedAt'];
+      return data.keys().hasOnly(allowedFields) &&
+             data.keys().hasAll(['jobId', 'candidateUid', 'status', 'appliedAt']) &&
+             data.candidateUid == request.auth.uid &&
+             data.status in ['pending', 'reviewed', 'accepted', 'rejected'] &&
+             data.appliedAt is timestamp &&
+             data.jobId is string && data.jobId.size() < 50;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && isValidUser(request.resource.data);
+      allow update: if isOwner(uid) && isValidUser(request.resource.data) && 
+                    request.resource.data.role == resource.data.role;
+    }
+
+    match /companies/{companyId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidCompany(request.resource.data);
+      allow update: if (isOwner(resource.data.adminUid) || isAdmin()) && isValidCompany(request.resource.data);
+    }
+
+    match /jobs/{jobId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+                    get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'company_admin' &&
+                    isValidJob(request.resource.data);
+      allow update: if (isCompanyAdmin(resource.data.companyId) || isAdmin()) && isValidJob(request.resource.data);
+      allow delete: if (isCompanyAdmin(resource.data.companyId) || isAdmin());
+    }
+
+    match /applications/{applicationId} {
+      allow read: if isAuthenticated() && 
+                  (isOwner(resource.data.candidateUid) || 
+                   isCompanyAdmin(get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.companyId) ||
+                   isAdmin());
+      allow create: if isAuthenticated() && isValidApplication(request.resource.data);
+      allow update: if isAuthenticated() && 
+                    (isCompanyAdmin(get(/databases/$(database)/documents/jobs/$(resource.data.jobId)).data.companyId) || isAdmin()) &&
+                    isValidApplication(request.resource.data);
+    }
+  }
+}
